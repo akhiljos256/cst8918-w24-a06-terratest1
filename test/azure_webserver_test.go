@@ -84,4 +84,15 @@ func TestAzureLinuxVMCreation(t *testing.T) {
 
 	// Confirm VM exists
 	assert.True(t, azure.VirtualMachineExists(t, vmName, resourceGroupName, subscriptionID))
+
+	// Test 2: Confirm NIC exists and is connected to VM
+	assert.True(t, azure.NetworkInterfaceExists(t, nicName, resourceGroupName, subscriptionID), "NIC does not exist")
+	nic := azure.GetNetworkInterface(t, nicName, resourceGroupName, subscriptionID)
+	assert.Equal(t, vmName, *nic.VirtualMachine.ID, "NIC is not attached to the correct VM")
+
+	// Test 3: Confirm the VM is running the correct Ubuntu version
+	expectedUbuntuVersion := "22.04" // Change this based on the Terraform configuration
+	vm := azure.GetVirtualMachine(t, vmName, resourceGroupName, subscriptionID)
+	assert.Contains(t, *vm.StorageProfile.ImageReference.Offer, "Ubuntu", "VM is not running Ubuntu")
+	assert.Contains(t, *vm.StorageProfile.ImageReference.Sku, expectedUbuntuVersion, "VM is not running the expected Ubuntu version")
 }
