@@ -2,15 +2,58 @@ package test
 
 import (
 	"testing"
+	"time"
 
 	"github.com/gruntwork-io/terratest/modules/azure"
+	"github.com/gruntwork-io/terratest/modules/shell"
 	"github.com/gruntwork-io/terratest/modules/terraform"
 	"github.com/stretchr/testify/assert"
 )
 
 // You normally want to run this under a separate "Testing" subscription
 // For lab purposes you will use your assigned subscription under the Cloud Dev/Ops program tenant
-var subscriptionID string = "<your-azure-subscription-id"
+var subscriptionID string = "5eb83737-e0c8-46c1-818d-4d9725820e3f"
+
+func cleanupAzureResources(t *testing.T, terraformOptions *terraform.Options) {
+	// Get resource names from outputs
+	resourceGroupName := terraform.Output(t, terraformOptions, "resource_group_name")
+	vmName := terraform.Output(t, terraformOptions, "vm_name")
+
+	// Delete VM and its disk first using az CLI if it exists
+	if azure.VirtualMachineExists(t, vmName, resourceGroupName, subscriptionID) {
+		// Delete VM
+		cmd := shell.Command{
+			Command: "az",
+			Args: []string{
+				"vm",
+				"delete",
+				"--resource-group", resourceGroupName,
+				"--name", vmName,
+				"--yes",
+			},
+		}
+		shell.RunCommand(t, cmd)
+
+		// Delete OS disk
+		diskName := vmName + "OSDisk"
+		cmd = shell.Command{
+			Command: "az",
+			Args: []string{
+				"disk",
+				"delete",
+				"--resource-group", resourceGroupName,
+				"--name", diskName,
+				"--yes",
+			},
+		}
+		shell.RunCommand(t, cmd)
+
+		time.Sleep(30 * time.Second) // Wait for deletions to complete
+	}
+
+	// Now run terraform destroy
+	terraform.Destroy(t, terraformOptions)
+}
 
 func TestAzureLinuxVMCreation(t *testing.T) {
 	terraformOptions := &terraform.Options{
@@ -18,13 +61,21 @@ func TestAzureLinuxVMCreation(t *testing.T) {
 		TerraformDir: "../",
 		// Override the default terraform variables
 		Vars: map[string]interface{}{
-			"labelPrefix": "<your-college-id>",
+			"labelPrefix": "jose0337",
+		},
+		// Add retry options for more graceful cleanup
+		MaxRetries:         5,
+		TimeBetweenRetries: 10 * time.Second,
+		RetryableTerraformErrors: map[string]string{
+			"InternalServerError":                  "Internal Server Error",
+			"NetworkSecurityGroupOldReferencesNotCleanedUp": "Network security group cannot be deleted",
 		},
 	}
 
-	defer terraform.Destroy(t, terraformOptions)
+	// Make sure to clean up resources even if the test fails
+	defer cleanupAzureResources(t, terraformOptions)
 
-	// Run `terraform init` and `terraform apply`. Fail the test if there are any errors.
+	// Run `terraform init` and `terraform apply`
 	terraform.InitAndApply(t, terraformOptions)
 
 	// Run `terraform output` to get the value of output variable
