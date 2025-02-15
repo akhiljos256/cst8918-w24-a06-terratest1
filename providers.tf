@@ -18,8 +18,11 @@ terraform {
 
 # Define providers and their config params
 provider "azurerm" {
-  # Leave the features block empty to accept all defaults
-  features {}
+  features {
+    resource_group {
+      prevent_deletion_if_contains_resources = false
+    }
+  }
 }
 
 provider "cloudinit" {

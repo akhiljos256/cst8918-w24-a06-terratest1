@@ -72,12 +72,31 @@ resource "azurerm_network_interface" "webserver" {
     private_ip_address_allocation = "Dynamic"
     public_ip_address_id          = azurerm_public_ip.webserver.id
   }
+
+  lifecycle {
+    create_before_destroy = true
+  }
+
+  depends_on = [
+    azurerm_subnet.webserver,
+    azurerm_public_ip.webserver
+  ]
 }
 
 # Link the security group to the NIC
 resource "azurerm_network_interface_security_group_association" "webserver" {
   network_interface_id      = azurerm_network_interface.webserver.id
   network_security_group_id = azurerm_network_security_group.webserver.id
+
+  # Add lifecycle block to ensure this is destroyed before the NSG
+  lifecycle {
+    create_before_destroy = true
+  }
+
+  depends_on = [
+    azurerm_network_interface.webserver,
+    azurerm_network_security_group.webserver
+  ]
 }
 
 # Define the init script template
